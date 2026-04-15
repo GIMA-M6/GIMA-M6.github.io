@@ -1,3 +1,5 @@
+console.log("De gegenereerde URL is:", apiUrl);
+
 // Initialize the map centered on Utrecht
 const map = L.map('map').setView([52.0907, 5.1214], 13);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
