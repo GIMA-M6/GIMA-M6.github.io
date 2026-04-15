@@ -1,39 +1,79 @@
-// Initialize the map centered on Utrecht
-const map = L.map('map').setView([52.0907, 5.1214], 13);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-
-let clicks = [];
-let routeLine = null;
-
-// Listen for clicks on the map
-map.on('click', async function(e) {
-    clicks.push(e.latlng);
-    L.marker(e.latlng).addTo(map); // Drop a pin
-
-    // When we have two clicks, ask the Python server for the route
-    if (clicks.length === 2) {
-        const start = clicks[0];
-        const end = clicks[1];
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Utrecht Route Planner</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <style>
+        body { margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        #map { height: 100vh; width: 100vw; z-index: 1; }
         
-        // Construct the URL to your Python API (change this to your actual server URL later)
-        const apiUrl = `https://route-backend-api.onrender.com/get-route?start_lat=${start.lat}&start_lon=${start.lng}&end_lat=${end.lat}&end_lon=${end.lng}`;
-        
-        try {
-            console.log("Generated URL is:", apiUrl);
-            const response = await fetch(apiUrl);
-            const data = await response.json();
-            
-            if (data.status === "success") {
-                // Draw the line on the map
-                if (routeLine) map.removeLayer(routeLine); // Remove old route
-                routeLine = L.polyline(data.route, {color: 'red', weight: 5}).addTo(map);
-            } else {
-                alert("Could not find a route!");
-            }
-        } catch (error) {
-            console.error("API Error:", error);
+        /* Het zwevende UI Paneel */
+        #ui-panel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            width: 300px;
+            z-index: 1000; /* Zorgt dat het paneel BOVEN de kaart zweeft */
         }
+
+        #ui-panel h2 { margin-top: 0; font-size: 1.4rem; color: #333; }
         
-        clicks = []; // Reset for the next route
-    }
-});
+        .input-group { margin-bottom: 15px; }
+        .input-group label { display: block; font-size: 0.85rem; font-weight: bold; margin-bottom: 5px; color: #555; }
+        .input-group input { width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; background-color: #f9f9f9;}
+        
+        /* Knoppen opmaak */
+        .btn { padding: 10px; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+        .btn-full { width: 100%; margin-bottom: 10px; }
+        
+        #calc-btn { background-color: #0078A8; color: white; }
+        #calc-btn:hover { background-color: #005f85; }
+        
+        #reset-btn { background-color: #e0e0e0; color: #333; }
+        #reset-btn:hover { background-color: #ccc; }
+        
+        .search-btn { width: 40px; margin: 0; padding: 8px; background-color: #0078A8; color: white; }
+        .search-btn:hover { background-color: #005f85; }
+    </style>
+</head>
+<body>
+
+    <div id="ui-panel">
+        <h2>Tourist Route Planner</h2>
+        
+        <div class="input-group">
+            <label>Origin</label>
+            <div style="display: flex; gap: 5px;">
+                <input type="text" id="start-input" placeholder="Type a place or click map...">
+                <button id="search-start" class="btn search-btn">🔍</button>
+            </div>
+        </div>
+        
+        <div class="input-group">
+            <label>Destination</label>
+            <div style="display: flex; gap: 5px;">
+                <input type="text" id="end-input" placeholder="Type a place or click map...">
+                <button id="search-end" class="btn search-btn">🔍</button>
+            </div>
+        </div>
+
+        <button id="calc-btn" class="btn btn-full">Calculate Route</button>
+        <button id="reset-btn" class="btn btn-full">Reset Map</button>
+        
+        <p id="status-text" style="font-size: 0.8rem; color: #888; text-align: center; margin-bottom: 0;"></p>
+    </div>
+
+    <div id="map"></div>
+
+    <script src="app.js"></script>
+</body>
+</html>
