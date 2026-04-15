@@ -4,18 +4,98 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '© OpenStreetMap contributors'
 }).addTo(map);
 
-// 2. Variabelen om data op te slaan
+// 2. Variabelen om de status op te slaan
 let startCoords = null;
 let endCoords = null;
 let routeLine = null;
 let markers = [];
+let timeoutId; // Voor de typ-vertraging (debouncing)
 
-// --- FUNCTIE: Geocoding via OpenStreetMap (Nominatim) ---
+// --- DEEL 1: AUTOCOMPLETE & ZOEKEN TERWIJL JE TYPT ---
+async function fetchSuggestions(query, boxId, isStart) {
+    const box = document.getElementById(boxId);
+    
+    // Pas zoeken als er 3 of meer letters zijn getypt
+    if (query.length < 3) {
+        box.style.display = 'none';
+        return;
+    }
+
+    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query + ', Utrecht')}&limit=5`;
+
+    try {
+        const response = await fetch(url);
+        const data = await response.json();
+        
+        box.innerHTML = ''; 
+        
+        if (data.length > 0) {
+            data.forEach(item => {
+                const div = document.createElement('div');
+                div.className = 'suggestion-item';
+                
+                const shortName = item.display_name.split(',').slice(0, 2).join(',');
+                div.innerText = shortName;
+                
+                // Wat er gebeurt als je op een suggestie klikt
+                div.onclick = () => {
+                    const inputId = isStart ? 'start-input' : 'end-input';
+                    document.getElementById(inputId).value = item.display_name.split(',')[0];
+                    box.style.display = 'none'; 
+                    geocodeExactLocation(item, isStart);
+                };
+                
+                box.appendChild(div);
+            });
+            box.style.display = 'block'; 
+        } else {
+            box.style.display = 'none';
+        }
+    } catch (error) {
+        console.error("Suggestion Error:", error);
+    }
+}
+
+// Hulpfunctie: Verwerkt de klik op een suggestie uit het menu
+function geocodeExactLocation(data, isStart) {
+    const lat = parseFloat(data.lat);
+    const lng = parseFloat(data.lon);
+    const coords = { lat: lat, lng: lng };
+    
+    if (isStart) startCoords = coords;
+    else endCoords = coords;
+
+    const marker = L.marker([lat, lng]).addTo(map);
+    markers.push(marker);
+    map.setView([lat, lng], 15);
+    document.getElementById('status-text').innerText = "Location selected!";
+}
+
+// Event Listeners voor typen in de zoekbalken (met 500ms debounce)
+document.getElementById('start-input').addEventListener('input', function(e) {
+    clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => fetchSuggestions(e.target.value, 'start-suggestions', true), 500);
+});
+
+document.getElementById('end-input').addEventListener('input', function(e) {
+    clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => fetchSuggestions(e.target.value, 'end-suggestions', false), 500);
+});
+
+// Verberg de drop-down menu's als je ergens anders op het scherm klikt
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('.input-group')) {
+        document.getElementById('start-suggestions').style.display = 'none';
+        document.getElementById('end-suggestions').style.display = 'none';
+    }
+});
+
+
+// --- DEEL 2: HANDMATIG ZOEKEN (Via de 🔍 knop of Enter) ---
 async function geocodeLocation(query, isStart) {
     const statusText = document.getElementById('status-text');
     statusText.innerText = "Searching for location...";
 
-    // Voeg ', Utrecht' toe zodat zoeken buiten de stad wordt voorkomen
     const searchUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query + ', Utrecht')}&limit=1`;
 
     try {
@@ -23,36 +103,37 @@ async function geocodeLocation(query, isStart) {
         const data = await response.json();
 
         if (data.length > 0) {
-            const lat = parseFloat(data[0].lat);
-            const lng = parseFloat(data[0].lon);
-            const placeName = data[0].display_name.split(',')[0]; // Korte naam
-
-            const coords = { lat: lat, lng: lng };
-            
-            if (isStart) {
-                startCoords = coords;
-                document.getElementById('start-input').value = placeName;
-            } else {
-                endCoords = coords;
-                document.getElementById('end-input').value = placeName;
-            }
-
-            // Plaats pin en zoom
-            const marker = L.marker([lat, lng]).addTo(map);
-            markers.push(marker);
-            map.setView([lat, lng], 15);
+            geocodeExactLocation(data[0], isStart);
+            const placeName = data[0].display_name.split(',')[0];
+            if (isStart) document.getElementById('start-input').value = placeName;
+            else document.getElementById('end-input').value = placeName;
             
             statusText.innerText = "Location found!";
         } else {
             statusText.innerText = "Location not found in Utrecht.";
         }
     } catch (error) {
-        console.error("Geocoding Error:", error);
         statusText.innerText = "Search failed.";
     }
 }
 
-// --- EVENT LISTENERS: Klikken op de kaart ---
+document.getElementById('search-start').addEventListener('click', () => {
+    const query = document.getElementById('start-input').value;
+    if (query.length > 2) geocodeLocation(query, true);
+});
+document.getElementById('search-end').addEventListener('click', () => {
+    const query = document.getElementById('end-input').value;
+    if (query.length > 2) geocodeLocation(query, false);
+});
+document.getElementById('start-input').addEventListener('keypress', e => {
+    if (e.key === 'Enter') document.getElementById('search-start').click();
+});
+document.getElementById('end-input').addEventListener('keypress', e => {
+    if (e.key === 'Enter') document.getElementById('search-end').click();
+});
+
+
+// --- DEEL 3: KLIKKEN OP DE KAART ---
 map.on('click', function(e) {
     if (!startCoords) {
         startCoords = e.latlng;
@@ -65,26 +146,8 @@ map.on('click', function(e) {
     }
 });
 
-// --- EVENT LISTENERS: Zoekbalken ---
-document.getElementById('search-start').addEventListener('click', function() {
-    const query = document.getElementById('start-input').value;
-    if (query.length > 2) geocodeLocation(query, true);
-});
 
-document.getElementById('search-end').addEventListener('click', function() {
-    const query = document.getElementById('end-input').value;
-    if (query.length > 2) geocodeLocation(query, false);
-});
-
-// Zorg dat 'Enter' ook werkt in de zoekbalken
-document.getElementById('start-input').addEventListener('keypress', function(e) {
-    if (e.key === 'Enter') document.getElementById('search-start').click();
-});
-document.getElementById('end-input').addEventListener('keypress', function(e) {
-    if (e.key === 'Enter') document.getElementById('search-end').click();
-});
-
-// --- EVENT LISTENER: Route Berekenen (API Aanroep) ---
+// --- DEEL 4: DE BACKEND AANROEPEN (Route Berekenen) ---
 document.getElementById('calc-btn').addEventListener('click', async function() {
     if (!startCoords || !endCoords) {
         alert("Please select both an Origin and a Destination first!");
@@ -94,7 +157,7 @@ document.getElementById('calc-btn').addEventListener('click', async function() {
     const statusText = document.getElementById('status-text');
     statusText.innerText = "Calculating route... (waking up server if asleep, max 60s)";
 
-    // Link naar jullie live Render Python API
+    // Let op: Dit is de live Render API link
     const apiUrl = `https://route-backend-api.onrender.com/get-route?start_lat=${startCoords.lat}&start_lon=${startCoords.lng}&end_lat=${endCoords.lat}&end_lon=${endCoords.lng}`;
 
     try {
@@ -106,9 +169,8 @@ document.getElementById('calc-btn').addEventListener('click', async function() {
         if (data.status === "success") {
             if (routeLine) map.removeLayer(routeLine);
             
-            // Teken de rode lijn
             routeLine = L.polyline(data.route, {color: '#e32400', weight: 6, opacity: 0.8}).addTo(map);
-            map.fitBounds(routeLine.getBounds());
+            map.fitBounds(routeLine.getBounds(), { padding: [50, 50] });
             statusText.innerText = "Route found!";
         } else {
             statusText.innerText = "Could not find a route.";
@@ -119,7 +181,8 @@ document.getElementById('calc-btn').addEventListener('click', async function() {
     }
 });
 
-// --- EVENT LISTENER: Reset de kaart ---
+
+// --- DEEL 5: RESET DE KAART ---
 document.getElementById('reset-btn').addEventListener('click', function() {
     startCoords = null;
     endCoords = null;
