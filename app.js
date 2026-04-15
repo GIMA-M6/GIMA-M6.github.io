@@ -1,5 +1,3 @@
-console.log("De gegenereerde URL is:", apiUrl);
-
 // Initialize the map centered on Utrecht
 const map = L.map('map').setView([52.0907, 5.1214], 13);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
@@ -21,6 +19,7 @@ map.on('click', async function(e) {
         const apiUrl = `https://route-backend-api.onrender.com/get-route?start_lat=${start.lat}&start_lon=${start.lng}&end_lat=${end.lat}&end_lon=${end.lng}`;
         
         try {
+            console.log("Generated URL is:", apiUrl);
             const response = await fetch(apiUrl);
             const data = await response.json();
             
