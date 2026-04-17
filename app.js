@@ -158,7 +158,7 @@ document.getElementById('calc-btn').addEventListener('click', async function() {
     statusText.innerText = "Calculating route... (waking up server if asleep, max 60s)";
 
     // Let op: Dit is de live Render API link
-    const apiUrl = `https://route-backend-api.onrender.com/get-route?start_lat=${startCoords.lat}&start_lon=${startCoords.lng}&end_lat=${endCoords.lat}&end_lon=${endCoords.lng}`;
+    const apiUrl = `https://olegbergs-route-backend-api.hf.space/get-route?start_lat=${startCoords.lat}&start_lon=${startCoords.lng}&end_lat=${endCoords.lat}&end_lon=${endCoords.lng}`;
 
     try {
         const response = await fetch(apiUrl);
